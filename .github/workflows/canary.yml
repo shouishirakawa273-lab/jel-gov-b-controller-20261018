@@ -1,0 +1,28 @@
+name: Stage B Environment canary
+on:
+  workflow_dispatch:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: b-canary
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          persist-credentials: false
+      # main stays owner-locked. Checkout cannot change deployment event/ref;
+      # denied refs should never reach this step or the canary step below.
+      # Intentionally no CLI ref gate: GitHub Environment rules must decide first.
+      # Same bytes bootstrap into main/probe branch/tag under owner approval.
+      - name: Record presence only
+        env:
+          B_CANARY: ${{ secrets.B_CANARY }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          print(json.dumps({"canary_present": bool(os.environ.get("B_CANARY")), "ref": os.environ.get("GITHUB_REF"), "event": os.environ.get("GITHUB_EVENT_NAME"), "run_id": os.environ.get("GITHUB_RUN_ID")}))
+          PY

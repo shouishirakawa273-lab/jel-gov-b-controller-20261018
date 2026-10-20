@@ -1,0 +1,74 @@
+name: Stage B fixed App probe
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [seed, gate-positive, checks-denial, positive-pr, negative-pr, protected-push-denial, admin-denial, legacy-enable-denial, legacy-dispatch-denial, merge-denial]
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: stage-b-fixed-session
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.repository == 'shouishirakawa273-lab/jel-gov-b-controller-20261018' && github.ref == 'refs/heads/main'
+    environment: ${{ (inputs.operation == 'seed' || inputs.operation == 'gate-positive') && 'b-gate-publish' || 'b-code-probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: verify
+        env:
+          B_EXECUTION_BINDING_JSON: ${{ vars.B_EXECUTION_BINDING_JSON }}
+          B_BINDING_SHA256: ${{ vars.B_BINDING_SHA256 }}
+          OPERATION: ${{ inputs.operation }}
+        run: python3 verify_control.py
+      - id: gate
+        if: inputs.operation == 'seed' || inputs.operation == 'gate-positive'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          client-id: ${{ steps.verify.outputs.gate_client_id }}
+          private-key: ${{ secrets.B_GATE_APP_PRIVATE_KEY }}
+          owner: shouishirakawa273-lab
+          repositories: jel-gov-b-candidate-20261018
+          permission-contents: read
+          permission-pull-requests: read
+          permission-checks: write
+          skip-token-revoke: false
+      - id: code
+        if: inputs.operation != 'seed' && inputs.operation != 'gate-positive'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+        with:
+          client-id: ${{ steps.verify.outputs.code_client_id }}
+          private-key: ${{ secrets.B_CODE_APP_PRIVATE_KEY }}
+          owner: shouishirakawa273-lab
+          repositories: jel-gov-b-candidate-20261018
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+      - name: Fixed synthetic operation
+        env:
+          B_INSTALLATION_TOKEN: ${{ steps.gate.outputs.token || steps.code.outputs.token }}
+          B_APPROVED_MANIFEST: ${{ steps.verify.outputs.manifest_sha256 }}
+          OPERATION: ${{ inputs.operation }}
+        run: python3 probe.py "$OPERATION" --binding execution-binding.json --execute > receipt.json
+      - name: Explicit token revocation fallback
+        if: always() && (steps.gate.outputs.token != '' || steps.code.outputs.token != '')
+        env:
+          B_INSTALLATION_TOKEN: ${{ steps.gate.outputs.token || steps.code.outputs.token }}
+          B_APPROVED_MANIFEST: ${{ steps.verify.outputs.manifest_sha256 }}
+        run: python3 probe.py revoke --binding execution-binding.json --execute > revocation.json
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: stage-b-sanitized-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            receipt.json
+            revocation.json
+          retention-days: 1
+          if-no-files-found: error

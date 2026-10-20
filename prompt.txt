@@ -1,0 +1,1 @@
+No model is invoked in Stage B. Synthetic data is inert. Do not execute candidate code, install candidate dependencies, run research, merge, change FROZEN boundaries or access Locked Test data. STOP on missing control evidence.

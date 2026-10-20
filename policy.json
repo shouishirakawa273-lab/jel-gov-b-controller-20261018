@@ -1,0 +1,1 @@
+{"stage":"B","ai_api_calls":0,"merge_permitted":false,"frozen_change_permitted":false,"locked_permitted":false,"candidate_execution_permitted":false,"max_runs":20,"max_api_requests":300,"cleanup_reserved_runs":4,"cleanup_reserved_requests":60,"session_minutes":120,"artifact_retention_days":1,"artifact_total_bytes":5000000,"status":"NOT_RUN"}
